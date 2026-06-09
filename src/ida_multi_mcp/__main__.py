@@ -75,7 +75,12 @@ def _detect_ida_dir() -> str | None:
     seen: set[str] = set()
     for root in scan_roots:
         try:
-            for entry in root.iterdir():
+            entries = list(root.iterdir())
+        except OSError:
+            # Unreadable root (permissions, missing, etc.) — skip it.
+            continue
+        for entry in entries:
+            try:
                 if not entry.is_dir():
                     continue
                 if "ida" not in entry.name.lower():
@@ -99,8 +104,10 @@ def _detect_ida_dir() -> str | None:
                 m = _IDA_VERSION_RE.search(entry.name)
                 ver = tuple(int(x) for x in m.group(1).split(".")) if m else (0, 0)
                 candidates.append((ver, resolved))
-        except PermissionError:
-            continue
+            except OSError:
+                # A single problematic entry (junction loop, device, ACL)
+                # must not abort the scan of the remaining entries.
+                continue
 
     if not candidates:
         return None
@@ -238,9 +245,9 @@ def install_mcp_servers(uninstall=False, quiet=False):
     # Map client names to their JSON key paths for clients that don't use "mcpServers"
     # Format: client_name -> (top_level_key, nested_key)
     # None means use default "mcpServers" at top level
+    # top_key None means the servers map lives at the top level under nested_key.
     special_json_structures = {
         "VS Code": ("mcp", "servers"),
-        "Visual Studio 2022": (None, "servers"),  # servers at top level
     }
 
     if sys.platform == "win32":
@@ -731,7 +738,7 @@ def install_mcp_servers(uninstall=False, quiet=False):
             if name in special_json_structures:
                 top_key, nested_key = special_json_structures[name]
                 if top_key is None:
-                    # servers at top level (e.g., Visual Studio 2022)
+                    # servers map at the top level under nested_key
                     if nested_key not in config:
                         config[nested_key] = {}
                     mcp_servers = config[nested_key]
@@ -749,16 +756,19 @@ def install_mcp_servers(uninstall=False, quiet=False):
                 mcp_servers = config["mcpServers"]
 
         # Migrate old "ida-pro-mcp" entry to "ida-multi-mcp"
+        migrated = False
         old_name = "ida-pro-mcp"
         if old_name in mcp_servers:
             mcp_servers[SERVER_NAME] = mcp_servers[old_name]
             del mcp_servers[old_name]
+            migrated = True
 
         # Also migrate the fully-qualified old name
         old_name_full = "github.com/mrexodia/ida-pro-mcp"
         if old_name_full in mcp_servers:
             mcp_servers[SERVER_NAME] = mcp_servers[old_name_full]
             del mcp_servers[old_name_full]
+            migrated = True
 
         if uninstall:
             if SERVER_NAME not in mcp_servers:
@@ -769,9 +779,18 @@ def install_mcp_servers(uninstall=False, quiet=False):
                 continue
             del mcp_servers[SERVER_NAME]
         else:
-            mcp_servers[SERVER_NAME] = generate_mcp_config(
-                include_type=(name == "Factory Droid")
-            )
+            new_entry = generate_mcp_config(include_type=(name == "Factory Droid"))
+            existing = mcp_servers.get(SERVER_NAME)
+            # Skip an untouched, already-correct entry to avoid rewriting the
+            # user's config file. A migration above always forces a write.
+            if not migrated and existing == new_entry:
+                if not quiet:
+                    print(f"Skipping {name}\n  Config: {config_path} (already up to date)")
+                continue
+            # Don't silently clobber a customized entry — say what is happening.
+            if existing is not None and existing != new_entry and not quiet:
+                print(f"Replacing existing '{SERVER_NAME}' entry in {name}\n  Config: {config_path}")
+            mcp_servers[SERVER_NAME] = new_entry
 
         # Atomic write: temp file + replace (with Windows-friendly fallback)
         suffix = ".toml" if is_toml else ".json"
