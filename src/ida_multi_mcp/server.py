@@ -781,6 +781,7 @@ class IdaMultiMcpServer:
         if host not in ALLOWED_HOSTS:
             return []
 
+        conn = None
         try:
             conn = http.client.HTTPConnection(host, port, timeout=10.0)
             request_body = json.dumps({
@@ -791,7 +792,6 @@ class IdaMultiMcpServer:
             conn.request("POST", "/mcp", request_body, {"Content-Type": "application/json"})
             response = conn.getresponse()
             response_data = json.loads(response.read().decode())
-            conn.close()
 
             if "result" in response_data:
                 tools = response_data["result"].get("tools", [])
@@ -802,6 +802,9 @@ class IdaMultiMcpServer:
         except Exception as e:
             print(f"[ida-multi-mcp] Failed to discover tools from instance: {e}", file=sys.stderr)
             return []
+        finally:
+            if conn is not None:
+                conn.close()  # always release the socket, even on error
 
     def run(self):
         """Run the MCP server with stdio transport."""

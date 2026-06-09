@@ -63,6 +63,7 @@ def ping_instance(host: str, port: int, timeout: float = 15.0) -> bool:
     # Security: only allow localhost connections (prevent SSRF)
     if host not in _ALLOWED_HOSTS:
         return False
+    conn = None
     try:
         conn = http.client.HTTPConnection(host, port, timeout=timeout)
         request = json.dumps({
@@ -72,10 +73,12 @@ def ping_instance(host: str, port: int, timeout: float = 15.0) -> bool:
         })
         conn.request("POST", "/mcp", request, {"Content-Type": "application/json"})
         response = conn.getresponse()
-        conn.close()
         return response.status == 200
     except Exception:
         return False
+    finally:
+        if conn is not None:
+            conn.close()  # always release the socket, even on error
 
 
 def check_instance_health(instance: dict) -> bool:
@@ -153,6 +156,7 @@ def query_binary_metadata(host: str, port: int, timeout: float = 5.0) -> dict | 
     # Security: only allow localhost connections (prevent SSRF)
     if host not in _ALLOWED_HOSTS:
         return None
+    conn = None
     try:
         conn = http.client.HTTPConnection(host, port, timeout=timeout)
         request = json.dumps({
@@ -164,7 +168,6 @@ def query_binary_metadata(host: str, port: int, timeout: float = 5.0) -> dict | 
         conn.request("POST", "/mcp", request, {"Content-Type": "application/json"})
         response = conn.getresponse()
         data = json.loads(response.read().decode())
-        conn.close()
 
         # Extract metadata from resource response
         result = data.get("result", {})
@@ -174,6 +177,9 @@ def query_binary_metadata(host: str, port: int, timeout: float = 5.0) -> dict | 
             return json.loads(text)
     except Exception:
         pass
+    finally:
+        if conn is not None:
+            conn.close()  # always release the socket, even on error
     return None
 
 
