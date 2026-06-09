@@ -29,11 +29,20 @@ def is_process_alive(pid: int) -> bool:
             import ctypes
             kernel32 = ctypes.windll.kernel32
             PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259  # GetExitCodeProcess return for a running process
             handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-            if handle:
-                kernel32.CloseHandle(handle)
+            if not handle:
+                return False
+            try:
+                # OpenProcess succeeds for a just-exited process whose handle is
+                # not yet released (a zombie). Confirm liveness via exit code.
+                exit_code = ctypes.c_ulong(0)
+                if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                    return exit_code.value == STILL_ACTIVE
+                # Could not read exit code — assume alive (benefit of the doubt).
                 return True
-            return False
+            finally:
+                kernel32.CloseHandle(handle)
         except Exception:
             return False
     else:
