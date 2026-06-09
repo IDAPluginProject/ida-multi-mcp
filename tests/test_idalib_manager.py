@@ -179,10 +179,14 @@ class TestGracefulTermination:
     @patch("ida_multi_mcp.idalib_manager.sys.platform", "win32")
     def test_windows_uses_ctrl_break(self):
         import signal
-        proc = MagicMock()
-        proc.poll.return_value = None
-        IdalibManager._terminate_gracefully(proc)
-        proc.send_signal.assert_called_once_with(signal.CTRL_BREAK_EVENT)
+        # CTRL_BREAK_EVENT only exists on Windows; create it so the win32 code
+        # path is exercisable on Linux/macOS CI runners too.
+        sentinel = getattr(signal, "CTRL_BREAK_EVENT", 1)
+        with patch.object(signal, "CTRL_BREAK_EVENT", sentinel, create=True):
+            proc = MagicMock()
+            proc.poll.return_value = None
+            IdalibManager._terminate_gracefully(proc)
+            proc.send_signal.assert_called_once_with(sentinel)
 
 
 class TestIdalibManagerList:
