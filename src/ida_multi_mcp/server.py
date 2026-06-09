@@ -363,6 +363,7 @@ class IdaMultiMcpServer:
         addrs = arguments.get("addrs", [])
         output_dir = arguments.get("output_dir", ".")
         mode = arguments.get("mode", "single")
+        allow_outside_cwd = arguments.get("allow_outside_cwd", False)
         instance_id = arguments.get("instance_id")
         if not instance_id:
             return {
@@ -375,7 +376,20 @@ class IdaMultiMcpServer:
         # Reject absolute paths that escape CWD unless they are subdirectories
         if ".." in os.path.normpath(output_dir).split(os.sep):
             return {"error": "output_dir must not contain '..' path components"}
-        # Warn but allow absolute paths (they may be intentional from the user)
+        # Security: confine output to the current working directory by default.
+        # Tool arguments here are LLM-generated, so an injected absolute path
+        # (e.g. a system directory) must not silently receive written files.
+        # Callers can opt out explicitly with allow_outside_cwd=true.
+        if not allow_outside_cwd:
+            cwd = os.path.realpath(os.getcwd())
+            if resolved_dir != cwd and not resolved_dir.startswith(cwd + os.sep):
+                return {
+                    "error": (
+                        "output_dir must be within the current working directory. "
+                        "Pass allow_outside_cwd=true to write elsewhere."
+                    ),
+                    "cwd": cwd,
+                }
         output_dir = resolved_dir
 
         # addr → name mapping (populated by list_funcs when using 'all')
@@ -623,11 +637,15 @@ class IdaMultiMcpServer:
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": "Directory to save decompiled files"
+                        "description": "Directory to save decompiled files. Must be within the current working directory unless allow_outside_cwd is true."
                     },
                     "mode": {
                         "type": "string",
                         "description": "Output mode: 'single' = one .c file per function (default), 'merged' = all in one file"
+                    },
+                    "allow_outside_cwd": {
+                        "type": "boolean",
+                        "description": "Permit output_dir outside the current working directory (default: false)."
                     },
                     "instance_id": {
                         "type": "string",

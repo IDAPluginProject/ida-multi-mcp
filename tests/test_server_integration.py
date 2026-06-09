@@ -103,6 +103,37 @@ class TestDecompileToFile:
         if "error" in structured:
             assert ".." in structured["error"]
 
+    def test_absolute_path_outside_cwd_rejected(self, server, tmp_path):
+        result = server._handle_decompile_to_file({
+            "output_dir": str(tmp_path),  # outside the project cwd
+            "instance_id": "x",
+            "addrs": ["0x1000"],
+        })
+        assert "error" in result
+        assert "current working directory" in result["error"]
+
+    def test_allow_outside_cwd_bypasses_check(self, server, tmp_path):
+        # With the opt-out, the cwd check passes; it then fails later for a
+        # different reason (no addresses), proving validation was bypassed.
+        result = server._handle_decompile_to_file({
+            "output_dir": str(tmp_path),
+            "allow_outside_cwd": True,
+            "instance_id": "x",
+            "addrs": [],
+        })
+        assert "error" in result
+        assert "current working directory" not in result["error"]
+
+    def test_cwd_relative_dir_accepted(self, server):
+        # "." resolves to cwd → passes the cwd guard, fails on no addresses.
+        result = server._handle_decompile_to_file({
+            "output_dir": ".",
+            "instance_id": "x",
+            "addrs": [],
+        })
+        assert "error" in result
+        assert "current working directory" not in result["error"]
+
 
 class TestProxiedTruncation:
     def test_response_truncation_and_caching(self, server):
