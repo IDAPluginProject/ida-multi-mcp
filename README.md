@@ -7,6 +7,10 @@ Multi-instance IDA Pro MCP server for simultaneous reverse engineering of multip
 ![IDA Pro](https://img.shields.io/badge/IDA%20Pro-8.3%2B-orange.svg)
 ![MCP](https://img.shields.io/badge/MCP-compatible-brightgreen.svg)
 
+## ✨ What's New
+
+- **Function similarity search (BCSD)** — locate the same or similar function *within a binary or across instances* (patch diffing, library-function ID, variant hunting). Name-independent signals that survive stripping — instruction-shingle MinHash + imported-API / string / constant anchors + CFG structure/shape — with an optional on-demand **local neural** recall (jTrans embeddings) for cross-compiler twins. All local, no cloud. → [details](#function-similarity-bcsd)
+
 ## Why ida-multi-mcp?
 
 Analyze multiple binaries in parallel — dropper, payload, C2 — through a single MCP connection. Each IDA Pro instance auto-registers on startup; your LLM client sees every instance without touching its config.
