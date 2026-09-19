@@ -1,10 +1,21 @@
 # Troubleshooting
 
-Last updated: 2026-09-09
+Last updated: 2026-09-19
 
 [← back to README](../README.md)
 
 ## Troubleshooting
+
+<details>
+<summary>"input identity changed or could not be verified" after updating</summary>
+
+Routing now checks the original-input digest stored in the IDB, as specified in [Routing Contract v2](.ssot/contracts/routing_contract.md#loaded-input-identity). Old registrations and older running plugins cannot supply that identity.
+
+Update the installed package and restart the GUI IDA process to load the updated plugin and register the database again, or close and reopen a managed idalib session. Call `list_instances()` and use the new `instance_id`. If the worker is busy, retry after its current operation completes. Databases without a stored SHA-256 or MD5 digest cannot be routed; reload from the original input to create a database with an input digest. Do not bypass the check with a filename-derived digest.
+
+The guard identifies the original loaded input; it does not detect edits made inside the IDB. Implementation: [router.py](../src/ida_multi_mcp/router.py) and [identity.py](../src/ida_multi_mcp/identity.py).
+
+</details>
 
 <details>
 <summary>"No IDA instances registered"</summary>
