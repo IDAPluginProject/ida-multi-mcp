@@ -17,7 +17,7 @@ import time
 from collections import deque
 from typing import TYPE_CHECKING
 
-from .health import is_process_alive, ping_instance, query_binary_metadata
+from .health import is_process_alive, ping_instance, query_binary_metadata, query_binary_identity
 
 if TYPE_CHECKING:
     from .registry import InstanceRegistry
@@ -216,6 +216,7 @@ class IdalibManager:
         metadata = query_binary_metadata(host, port, timeout=5.0)
         module_name = (metadata or {}).get("module") if metadata else None
         binary_name = module_name or os.path.basename(resolved_path)
+        identity = query_binary_identity(host, port)
         instance_id = self.registry.register(
             pid=proc.pid,
             port=port,
@@ -223,6 +224,7 @@ class IdalibManager:
             host=host,
             binary_name=binary_name,
             binary_path=resolved_path,
+            input_fingerprint=(identity or {}).get("input_fingerprint"),
             type="idalib",
         )
 

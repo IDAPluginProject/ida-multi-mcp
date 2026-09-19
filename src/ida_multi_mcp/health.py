@@ -146,6 +146,35 @@ def cleanup_stale_instances(registry: "InstanceRegistry", timeout_seconds: int =
     return removed
 
 
+def query_binary_identity(host: str, port: int, timeout: float = 5.0) -> dict | None:
+    """Read the loaded input's stored identity without hashing the disk file."""
+    if host not in _ALLOWED_HOSTS:
+        return None
+    conn = None
+    try:
+        conn = http.client.HTTPConnection(host, port, timeout=timeout)
+        request = json.dumps({
+            "jsonrpc": "2.0", "method": "resources/read",
+            "params": {"uri": "ida://idb/identity"}, "id": 1,
+        })
+        conn.request("POST", "/mcp", request, {"Content-Type": "application/json"})
+        response = conn.getresponse()
+        if response.status != 200:
+            return None
+        data = json.loads(response.read().decode("utf-8"))
+        contents = data.get("result", {}).get("contents", [])
+        if contents:
+            identity = json.loads(contents[0].get("text", "{}"))
+            if isinstance(identity, dict):
+                return identity
+    except Exception:
+        pass
+    finally:
+        if conn is not None:
+            conn.close()
+    return None
+
+
 def query_binary_metadata(host: str, port: int, timeout: float = 5.0) -> dict | None:
     """Query an IDA instance for its current binary metadata.
 
@@ -358,6 +387,7 @@ def _rediscover_instances(registry: "InstanceRegistry") -> list[str]:
 
         idb_path = metadata.get("path", "")
         binary_name = metadata.get("module", "unknown")
+        identity = query_binary_identity(host, port)
 
         instance_id = registry.register(
             pid=pid,
@@ -365,6 +395,7 @@ def _rediscover_instances(registry: "InstanceRegistry") -> list[str]:
             idb_path=idb_path,
             binary_name=binary_name,
             binary_path=metadata.get("input_file", ""),
+            input_fingerprint=(identity or {}).get("input_fingerprint"),
             arch=metadata.get("arch", "unknown"),
             host=host,
         )

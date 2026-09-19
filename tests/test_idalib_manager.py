@@ -27,7 +27,12 @@ class TestFindFreePort:
 @pytest.fixture(autouse=True)
 def _mock_idalib_available():
     """Assume IDA Pro (idalib) is available in all manager tests."""
-    with patch("ida_multi_mcp.idalib_manager.is_idalib_available", return_value=True):
+    with patch("ida_multi_mcp.idalib_manager.is_idalib_available", return_value=True), patch(
+        "ida_multi_mcp.idalib_manager.query_binary_identity",
+        return_value={"module": "test.exe", "input_fingerprint": {
+            "algorithm": "sha256", "digest": "ab" * 32,
+        }},
+    ):
         yield
 
 
@@ -80,6 +85,7 @@ class TestIdalibManagerSpawn:
         info = tmp_registry.get_instance(result["instance_id"])
         assert info is not None
         assert info["type"] == "idalib"
+        assert info["input_fingerprint"] == {"algorithm": "sha256", "digest": "ab" * 32}
 
     @patch("ida_multi_mcp.idalib_manager.subprocess.Popen")
     @patch("ida_multi_mcp.idalib_manager.ping_instance")
